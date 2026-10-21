@@ -10,6 +10,13 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - 127.0.0.1:5432:5432/tcp
+      - "127.0.0.1:5432:5432/tcp"
+  api:
+    build: .
+    container_name: alfahack-api
+    ports:
+      - "127.0.0.1:${PORT}:${PORT}/tcp"
+    depends_on:
+      - postgres
 volumes:
   db-data:
