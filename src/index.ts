@@ -3,7 +3,7 @@ import { node } from "@elysiajs/node";
 import { openapi } from "@elysia/openapi";
 import { z } from "zod";
 import { env } from "@/env";
-import { requestsController } from "@/request.controller";
+import { requestsController } from "@/request/request.controller";
 
 new Elysia({ adapter: node() })
   .use(
