@@ -1,0 +1,4 @@
+api.example.com {
+  tls /etc/caddy/example.com-ssl-bundle/domain.cert.pem /etc/caddy/example.com-ssl-bundle/private.key.pem
+  reverse_proxy http://127.0.0.1:3000
+}

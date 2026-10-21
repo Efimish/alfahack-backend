@@ -3,7 +3,7 @@ import { node } from "@elysiajs/node";
 import { openapi } from "@elysia/openapi";
 import { z } from "zod";
 import { env } from "@/env";
-import { requestController } from "@/request";
+import { requestsController } from "@/request.controller";
 
 new Elysia({ adapter: node() })
   .use(
@@ -20,7 +20,7 @@ new Elysia({ adapter: node() })
       },
     }),
   )
-  .use(requestController)
+  .use(requestsController)
   .listen(env.PORT);
 
 console.log(`Listening on http://127.0.0.1:${env.PORT}`);
