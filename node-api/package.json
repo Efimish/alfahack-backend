@@ -1,5 +1,5 @@
 {
-  "name": "alfahack-backend",
+  "name": "alfahack-node-api",
   "version": "0.0.0",
   "private": true,
   "type": "module",

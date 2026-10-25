@@ -1,0 +1,22 @@
+[project]
+name = "alf"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "BombasticFantastic", email = "artemilusenko2@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "catboost>=1.2.10",
+    "numpy>=2.5.4",
+    "openai>=3.37.0",
+    "pandas>=3.1.0",
+]
+
+[project.scripts]
+alf = "alf:main"
+
+[build-system]
+requires = ["uv_build>=0.12.21,<0.13.0"]
+build-backend = "uv_build"

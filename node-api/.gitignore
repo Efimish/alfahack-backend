@@ -1,6 +1,3 @@
-# General
-.DS_Store
-
 # Logs
 logs
 *.log
@@ -150,11 +147,3 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
-
-# Other
-.vscode/
-.idea/
-compose.yaml
-.prettierignore
-Caddyfile.example
-*.md
