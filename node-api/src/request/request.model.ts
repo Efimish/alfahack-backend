@@ -1,13 +1,11 @@
 import { z } from "zod";
 import { schema } from "@/db";
-
-const pdfFileSchema = z.custom<File>(
-  (value) =>
-    typeof File !== "undefined" &&
-    value instanceof File &&
-    value.type === "application/pdf",
-  { message: "Файл должен быть в формате PDF" },
-);
+import { AssessmentSchema } from "@/request/assessment.model";
+import {
+  FINANCING_PURPOSES,
+  MAX_MONEY,
+  REQUEST_STATUSES,
+} from "@/request/request.constants";
 
 export const ApiRequestInsertSchema = z
   .object({
@@ -17,6 +15,7 @@ export const ApiRequestInsertSchema = z
           .string()
           .trim()
           .min(1, "Укажите название компании")
+          .max(500)
           .meta({
             description: "Название компании",
             examples: ["ООО «Тмыв денег»"],
@@ -24,7 +23,7 @@ export const ApiRequestInsertSchema = z
         inn: z
           .string()
           .trim()
-          .min(1, "Укажите ИНН")
+          .regex(/^\d{10}(\d{2})?$/, "ИНН должен содержать 10 или 12 цифр")
           .meta({
             description: "ИНН (идентификационный номер налогоплательщика)",
             examples: ["0000111112"],
@@ -32,7 +31,7 @@ export const ApiRequestInsertSchema = z
         ogrn: z
           .string()
           .trim()
-          .min(1, "Укажите ОГРН")
+          .regex(/^\d{13}(\d{2})?$/, "ОГРН должен содержать 13 или 15 цифр")
           .meta({
             description:
               "ОГРН (основной государственный регистрационный номер)",
@@ -42,6 +41,7 @@ export const ApiRequestInsertSchema = z
           .string()
           .trim()
           .min(1, "Укажите вид деятельности")
+          .max(500)
           .meta({
             description: "Вид деятельности",
             examples: [
@@ -69,16 +69,21 @@ export const ApiRequestInsertSchema = z
 
     financials: z
       .object({
-        annualRevenue: z.number().meta({
+        annualRevenue: z.number().finite().min(0).max(MAX_MONEY).meta({
           description: "Выручка за последний год",
         }),
-        netProfit: z.number().meta({
-          description: "Чистая прибыть",
+        netProfit: z.number().finite().min(-MAX_MONEY).max(MAX_MONEY).meta({
+          description: "Чистая прибыль (может быть отрицательной)",
         }),
-        workingCapital: z.number().meta({
-          description: "Оборотные средства",
-        }),
-        debtBurden: z.number().meta({
+        workingCapital: z
+          .number()
+          .finite()
+          .min(-MAX_MONEY)
+          .max(MAX_MONEY)
+          .meta({
+            description: "Оборотные средства",
+          }),
+        debtBurden: z.number().finite().min(0).max(MAX_MONEY).meta({
           description: "Кредитная нагрузка",
         }),
       })
@@ -86,32 +91,22 @@ export const ApiRequestInsertSchema = z
 
     financing: z
       .object({
-        purpose: z
-          .enum([
-            "Пополнение оборотных средств",
-            "Покупка оборудования",
-            "Закупка товаров, сырья, материалов",
-            "Расширение бизнеса",
-            "Уплата налогов и обязательных платежей",
-            "Покупка, ремонт, обустройство помещения",
-            "Рефинансирование действующих кредитов",
-            "Другое",
-          ])
-          .meta({
-            description: "Цель финансирования",
-          }),
-        requestedAmount: z.number().min(0).meta({
+        purpose: z.enum(FINANCING_PURPOSES).meta({
+          description: "Цель финансирования",
+        }),
+        requestedAmount: z.number().finite().positive().max(MAX_MONEY).meta({
           description: "Запрашиваемая сумма",
         }),
-        termMonths: z.int().min(0).meta({
+        termMonths: z.int().positive().max(360).meta({
           description: "Срок кредитования (в месяцах)",
         }),
       })
       .meta({ description: "Финансирование" }),
 
-    // documents: z.array(pdfFileSchema),
     comment: z
       .string()
+      .trim()
+      .max(2000)
       .optional()
       .meta({
         description: "Комментарий к заявке",
@@ -124,19 +119,12 @@ export const ApiRequestSelectSchema = ApiRequestInsertSchema.extend({
   id: z.guid().meta({
     description: "Уникальный идентификатор заявки",
   }),
-  status: z
-    .enum([
-      "Подана",
-      "Проверка данных",
-      "Ожидает данных",
-      "Повторная проверка",
-      "Одобрена",
-      "Отклонена",
-      "Предложены другие условия",
-    ])
-    .meta({
-      description: "Статус заявки",
-    }),
+  status: z.enum(REQUEST_STATUSES).meta({
+    description: "Статус заявки",
+  }),
+  assessment: AssessmentSchema.nullable().meta({
+    description: "Результат ML/LLM-оценки (null, если оценка не удалась)",
+  }),
   createdAt: z.iso.datetime().meta({
     description: "Дата и время создания заявки",
   }),
@@ -159,8 +147,8 @@ export const apiToDb = (data: ApiRequestInsert): DbRequestInsert => ({
   debtBurden: data.financials.debtBurden.toString(),
   financingPurpose: data.financing.purpose,
   requestedAmount: data.financing.requestedAmount.toString(),
-  termMonths: data.financing.requestedAmount,
-  comment: data.comment,
+  termMonths: data.financing.termMonths,
+  comment: data.comment?.trim() || null,
 });
 
 export const dbToApi = (data: DbRequestSelect): ApiRequestSelect => ({
@@ -184,5 +172,6 @@ export const dbToApi = (data: DbRequestSelect): ApiRequestSelect => ({
   },
   comment: data.comment ?? undefined,
   status: data.status,
+  assessment: data.assessment ?? null,
   createdAt: data.createdAt.toISOString(),
 });

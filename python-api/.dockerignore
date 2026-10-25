@@ -1,5 +1,7 @@
 # General
 .DS_Store
+.git
+.gitignore
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -228,3 +230,4 @@ __marimo__/
 data.csv
 train.py
 *.md
+!README.md

@@ -1,94 +1,102 @@
-import json
-import os
-import sys
+"""Internal FastAPI service: ML scoring + LLM explanation of credit applications.
 
-import numpy as np
-import openai
-from catboost import CatBoostClassifier
-
-if os.getenv("OLLAMA_CLOUD_API_KEY") == None:
-  print("Env variable OLLAMA_CLOUD_API_KEY is not set")
-  sys.exit(1)
-
-# вот здесь модель создаётся
-model = CatBoostClassifier().load_model("classification.cbm")
-
-# вот здесь я получаю инпут (типо получил ок да ?)
-input = np.array([2, 840000, 18, 0])
-
-# препроцесинг выхода
-predicted_class = np.digitize(model.predict_proba(input)[1], bins=[0.3, 0.6])
-
-categories = {
-  0: "Пополнение оборотных средств",
-  1: "Покупка оборудования",
-  2: "Закупка товаров, сырья, материалов",
-  3: "Расширение бизнеса",
-  4: "Уплата налогов и обязательных платежей",
-  5: "Покупка, ремонт, обустройство помещения",
-  6: "Рефинансирование действующих кредитов",
-  7: "Другое",
-}
-statuses = {0: "Отказ", 1: "Другое предложение", 2: "Согласие"}
-credit_classes = {
-  0: "плохой",
-  1: "нет рейтинга",
-  2: "средний рейтинг",
-  3: "хороший рейтинг",
-}
-
-# LLM
-# client = openai.OpenAI(base_url="http://localhost:9931/v1", api_key="no-key-required")
-# model = "bartowski/Ling-3.0-tiny-GGUF:Q4_K_M"
-client = openai.OpenAI(
-  base_url="https://ollama.com/v1", api_key=os.getenv("OLLAMA_CLOUD_API_KEY")
-)
-model = "gpt-oss:20b"
-
-credit_class = credit_classes[input[0]]
-credit_sum = input[1]
-credit_time = input[2]
-credit_reason = categories[input[3]]
-credit_status = statuses[predicted_class]
-
-credit_text = f"""
-{credit_status} - Человек с кредитным рейтингом - {credit_class} ,
-просит сумму {credit_sum} рублей,
-которые он погасит за {credit_time} месяца по причине - {credit_reason}
+The service is not published outside the Docker network. node-api calls it with
+a shared secret in the X-Internal-Api-Key header.
 """
 
-# print(credit_text)
-completion = client.chat.completions.create(
-  model=model,
-  messages=[
-    {
-      "role": "system",
-      "content": """
-Ты — финансовый аналитик кредитного отдела. Твоя задача — кратко объяснить кредитному инспектору логику решения ML-модели по заявке малого бизнеса.
+import logging
+import secrets
+from contextlib import asynccontextmanager
+from typing import Annotated
 
-ВХОДНЫЕ ДАННЫЕ:
-Тебе передается решение ML-модели (Согласие / Отказ / Другое предложение) и параметры кредита.
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 
-ЖЕСТКИЕ ПРАВИЛА:
-1. Запрещены галлюцинации и домыслы: Не придумывай залоги, поручителей, комиссии или абстрактные «дополнительные условия», если их нет во входном тексте.
-2. Опора только на 4 фактора: Используй для аргументации только передаваемые параметры: Кредитный рейтинг, Сумма, Срок, Цель кредита.
+from credit_model import CreditModel
+from explainer import Explainer
+from schemas import AssessmentRequest, AssessmentResponse, HealthResponse
+from settings import settings
 
-ФОРМАТ ОТВЕТА (выдавай строго в этом формате, без лишних вступлений):
+logging.basicConfig(
+  level=logging.INFO,
+  format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
-{
-  "Суть решения": "[1 предложение: в чём логика предсказанного решения]",
-  "Оценка факторов": {
-    "Кредитный рейтинг и сумма": "[Короткая оценка: как рейтинг соотносится с запрашиваемой суммой]",
-    "Срок и цель": "[Короткая оценка: как цель оправдывает или увеличивает риск на данном сроке]"
-  },
-  "Вывод для инспектора": "[1 короткое предложение с рекомендацией для принятия финального решения]"
-}
-""",
-    },
-    {"role": "user", "content": credit_text},
-  ],
+
+def require_internal_key(
+  x_internal_api_key: Annotated[
+    str | None, Header(alias="X-Internal-Api-Key")
+  ] = None,
+) -> None:
+  if not x_internal_api_key or not secrets.compare_digest(
+    x_internal_api_key.encode(), settings.internal_api_key.encode()
+  ):
+    raise HTTPException(
+      status_code=status.HTTP_401_UNAUTHORIZED,
+      detail="Invalid internal API key",
+    )
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+  logger.info("Loading CatBoost model from %s", settings.model_path)
+  app.state.credit_model = CreditModel(settings.model_path)
+  app.state.explainer = Explainer(settings)
+  logger.info("Service is ready")
+  try:
+    yield
+  finally:
+    await app.state.explainer.close()
+
+
+app = FastAPI(
+  title="Alfa Future — internal assessment API",
+  version="0.1.0",
+  lifespan=lifespan,
 )
 
-answer_text = completion.choices[0].message.content
-answer = json.loads(answer_text)
-print(answer)
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+  logger.exception("Unhandled error while processing %s", request.url.path)
+  return JSONResponse(
+    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    content={"detail": "Internal server error"},
+  )
+
+
+@app.get("/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
+  return HealthResponse(status="ok")
+
+
+@app.post(
+  "/assess",
+  response_model=AssessmentResponse,
+  dependencies=[Depends(require_internal_key)],
+)
+async def assess(payload: AssessmentRequest, request: Request) -> AssessmentResponse:
+  result = request.app.state.credit_model.assess(payload)
+  explanation, explanation_source = await request.app.state.explainer.explain(
+    payload, result
+  )
+
+  return AssessmentResponse(
+    request_id=payload.request_id,
+    decision=result.decision,
+    status=result.status,
+    credit_class=result.credit_class,
+    credit_class_source=result.credit_class_source,
+    risk_class=result.risk_class,
+    confidence=result.confidence,
+    probabilities=result.probabilities,
+    explanation=explanation,
+    explanation_source=explanation_source,
+  )
+
+
+if __name__ == "__main__":
+  import uvicorn
+
+  uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

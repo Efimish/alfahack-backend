@@ -1,4 +1,9 @@
 import * as pg from "drizzle-orm/pg-core";
+import type { Assessment } from "@/request/assessment.model";
+import {
+  FINANCING_PURPOSES,
+  REQUEST_STATUSES,
+} from "@/request/request.constants";
 
 export const requests = pg.pgTable("requests", {
   id: pg.uuid().defaultRandom().primaryKey(),
@@ -23,20 +28,7 @@ export const requests = pg.pgTable("requests", {
   debtBurden: pg.numeric({ precision: 14, scale: 2 }).notNull(),
 
   /** Цель финансирования */
-  financingPurpose: pg
-    .text({
-      enum: [
-        "Пополнение оборотных средств",
-        "Покупка оборудования",
-        "Закупка товаров, сырья, материалов",
-        "Расширение бизнеса",
-        "Уплата налогов и обязательных платежей",
-        "Покупка, ремонт, обустройство помещения",
-        "Рефинансирование действующих кредитов",
-        "Другое",
-      ],
-    })
-    .notNull(),
+  financingPurpose: pg.text({ enum: FINANCING_PURPOSES }).notNull(),
   /** Запрашиваемая сумма */
   requestedAmount: pg.numeric({ precision: 14, scale: 2 }).notNull(),
   /** Срок кредитования (в месяцах) */
@@ -46,20 +38,10 @@ export const requests = pg.pgTable("requests", {
   comment: pg.text(),
 
   /** Статус заявки */
-  status: pg
-    .text({
-      enum: [
-        "Подана",
-        "Проверка данных",
-        "Ожидает данных",
-        "Повторная проверка",
-        "Одобрена",
-        "Отклонена",
-        "Предложены другие условия",
-      ],
-    })
-    .default("Подана")
-    .notNull(),
+  status: pg.text({ enum: REQUEST_STATUSES }).default("Подана").notNull(),
+
+  /** Результат ML/LLM-оценки (null, пока оценка не получена) */
+  assessment: pg.jsonb().$type<Assessment>(),
 
   /** Дата создания заявки */
   createdAt: pg.timestamp({ withTimezone: true }).defaultNow().notNull(),

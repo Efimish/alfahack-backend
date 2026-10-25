@@ -1,5 +1,7 @@
 # General
 .DS_Store
+.git
+.gitignore
 
 # Logs
 logs

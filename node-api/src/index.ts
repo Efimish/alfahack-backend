@@ -20,6 +20,14 @@ new Elysia({ adapter: node() })
       },
     }),
   )
+  .get("/health", () => ({ status: "ok" as const }), {
+    detail: {
+      summary: "Проверка работоспособности",
+    },
+    response: {
+      200: z.object({ status: z.literal("ok") }),
+    },
+  })
   .use(requestsController)
   .listen(env.PORT);
 
