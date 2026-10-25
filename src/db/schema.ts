@@ -23,7 +23,20 @@ export const requests = pg.pgTable("requests", {
   debtBurden: pg.numeric({ precision: 14, scale: 2 }).notNull(),
 
   /** Цель финансирования */
-  financingPurpose: pg.text().notNull(),
+  financingPurpose: pg
+    .text({
+      enum: [
+        "Пополнение оборотных средств",
+        "Покупка оборудования",
+        "Закупка товаров, сырья, материалов",
+        "Расширение бизнеса",
+        "Уплата налогов и обязательных платежей",
+        "Покупка, ремонт, обустройство помещения",
+        "Рефинансирование действующих кредитов",
+        "Другое",
+      ],
+    })
+    .notNull(),
   /** Запрашиваемая сумма */
   requestedAmount: pg.numeric({ precision: 14, scale: 2 }).notNull(),
   /** Срок кредитования (в месяцах) */
@@ -31,6 +44,22 @@ export const requests = pg.pgTable("requests", {
 
   /** Комментарий к заявке */
   comment: pg.text(),
+
+  /** Статус заявки */
+  status: pg
+    .text({
+      enum: [
+        "Подана",
+        "Проверка данных",
+        "Ожидает данных",
+        "Повторная проверка",
+        "Одобрена",
+        "Отклонена",
+        "Предложены другие условия",
+      ],
+    })
+    .default("Подана")
+    .notNull(),
 
   /** Дата создания заявки */
   createdAt: pg.timestamp({ withTimezone: true }).defaultNow().notNull(),

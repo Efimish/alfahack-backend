@@ -87,17 +87,18 @@ export const ApiRequestInsertSchema = z
     financing: z
       .object({
         purpose: z
-          .string()
-          .trim()
-          .min(1, "Укажите цель финансирования")
+          .enum([
+            "Пополнение оборотных средств",
+            "Покупка оборудования",
+            "Закупка товаров, сырья, материалов",
+            "Расширение бизнеса",
+            "Уплата налогов и обязательных платежей",
+            "Покупка, ремонт, обустройство помещения",
+            "Рефинансирование действующих кредитов",
+            "Другое",
+          ])
           .meta({
             description: "Цель финансирования",
-            examples: [
-              "Покупка оборудования",
-              "Расширение бизнеса",
-              "Рефинансирование долга",
-              "Другое",
-            ],
           }),
         requestedAmount: z.number().min(0).meta({
           description: "Запрашиваемая сумма",
@@ -123,6 +124,19 @@ export const ApiRequestSelectSchema = ApiRequestInsertSchema.extend({
   id: z.guid().meta({
     description: "Уникальный идентификатор заявки",
   }),
+  status: z
+    .enum([
+      "Подана",
+      "Проверка данных",
+      "Ожидает данных",
+      "Повторная проверка",
+      "Одобрена",
+      "Отклонена",
+      "Предложены другие условия",
+    ])
+    .meta({
+      description: "Статус заявки",
+    }),
   createdAt: z.iso.datetime().meta({
     description: "Дата и время создания заявки",
   }),
@@ -169,5 +183,6 @@ export const dbToApi = (data: DbRequestSelect): ApiRequestSelect => ({
     termMonths: data.termMonths,
   },
   comment: data.comment ?? undefined,
+  status: data.status,
   createdAt: data.createdAt.toISOString(),
 });
