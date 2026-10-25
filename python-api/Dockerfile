@@ -3,4 +3,4 @@ WORKDIR /app
 ENV UV_NO_DEV=1
 COPY . .
 RUN uv sync --locked
-CMD ["uv", "run", "my_app"]
+CMD ["uv", "run", "main.py"]

@@ -1,7 +1,7 @@
 import pandas as pd
 from catboost import CatBoostClassifier
 
-data = pd.read_csv(filepath_or_buffer="data.csv")
+data = pd.read_csv(filepath_or_buffer="data.csv", index_col=0)
 x, y = data.drop("Risk", axis=1), data.Risk
 
 model = CatBoostClassifier()
